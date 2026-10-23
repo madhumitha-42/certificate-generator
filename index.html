@@ -1,0 +1,413 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CertifyCraft — Dynamic Certificate Generator & Verification Suite</title>
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Alex+Brush&family=Cinzel:wght@400;600;700;900&family=Fira+Code:wght@400;600&family=Inter:wght@300;400;500;600;700&family=Montserrat:wght@400;600;700&family=Playfair+Display:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  
+  <!-- Export & Utility Libraries -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <style>
+    :root {
+      --bg-dark: #0f172a;
+      --bg-card: #1e293b;
+      --border-color: #334155;
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #6366f1;
+      --accent-hover: #4f46e5;
+      --primary-color: #d97706;
+      --secondary-color: #1e293b;
+      --font-family: 'Cinzel', serif;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Inter', sans-serif; background-color: var(--bg-dark); color: var(--text-main); min-height: 100vh; display: flex; flex-direction: column; }
+    
+    header { background-color: #0b1120; border-bottom: 1px solid var(--border-color); padding: 1rem 2rem; display: flex; justify-content: space-between; align-items: center; }
+    .logo { display: flex; align-items: center; gap: 0.75rem; font-size: 1.25rem; font-weight: 700; color: #fff; }
+    .logo i { color: #818cf8; }
+
+    .container { display: grid; grid-template-columns: 380px 1fr; gap: 1.5rem; padding: 1.5rem; flex: 1; height: calc(100vh - 65px); overflow: hidden; }
+    .sidebar { background-color: var(--bg-card); border-radius: 12px; border: 1px solid var(--border-color); overflow-y: auto; padding: 1.25rem; display: flex; flex-direction: column; gap: 1.25rem; }
+    .main-view { background-color: #020617; border-radius: 12px; border: 1px solid var(--border-color); display: flex; flex-direction: column; padding: 1.5rem; overflow-y: auto; align-items: center; justify-content: flex-start; }
+
+    .section-title { font-size: 0.85rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.75rem; display: flex; align-items: center; gap: 0.5rem; }
+    .form-group { margin-bottom: 1rem; }
+    .form-group label { display: block; font-size: 0.8rem; font-weight: 500; color: #cbd5e1; margin-bottom: 0.35rem; }
+    .form-control { width: 100%; background: #0f172a; border: 1px solid var(--border-color); color: #fff; padding: 0.6rem; border-radius: 6px; font-size: 0.875rem; transition: all 0.2s; }
+    .form-control:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.2); }
+    textarea.form-control { resize: vertical; min-height: 60px; }
+
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem; padding: 0.6rem 1rem; font-size: 0.875rem; font-weight: 600; border-radius: 6px; border: none; cursor: pointer; transition: all 0.2s; width: 100%; }
+    .btn-primary { background-color: var(--accent); color: #fff; }
+    .btn-primary:hover { background-color: var(--accent-hover); }
+    .btn-secondary { background: #334155; color: #fff; }
+    .btn-secondary:hover { background: #475569; }
+    .btn-outline { background: transparent; border: 1px solid var(--border-color); color: #cbd5e1; }
+    .btn-outline:hover { background: #334155; }
+
+    .tabs { display: flex; border-bottom: 1px solid var(--border-color); margin-bottom: 1rem; gap: 0.5rem; }
+    .tab-btn { padding: 0.5rem 0.75rem; background: none; border: none; color: var(--text-muted); font-size: 0.85rem; font-weight: 600; cursor: pointer; border-bottom: 2px solid transparent; }
+    .tab-btn.active { color: #818cf8; border-bottom-color: #818cf8; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Canvas Stage */
+    .preview-toolbar { width: 100%; display: flex; justify-content: space-between; align-items: center; margin-bottom: 1rem; padding: 0.5rem 1rem; background-color: var(--bg-card); border-radius: 8px; border: 1px solid var(--border-color); }
+    .cert-stage { transform-origin: top center; transition: transform 0.2s; box-shadow: 0 20px 25px -5px rgba(0,0,0,0.5); }
+
+    /* Certificate Design Templates */
+    .certificate { width: 900px; height: 630px; background-color: #fff; color: #1e293b; position: relative; padding: 40px; box-sizing: border-box; display: flex; flex-direction: column; justify-content: space-between; font-family: 'Cinzel', serif; overflow: hidden; }
+    
+    /* Themes */
+    .theme-classic { border: 12px solid #d97706; outline: 3px solid #b45309; outline-offset: -8px; background: radial-gradient(circle, #fffdfa 0%, #fef3c7 100%); }
+    .theme-modern { border-left: 20px solid #2563eb; background: #ffffff; box-shadow: inset 0 0 50px rgba(37,99,235,0.05); }
+    .theme-tech { background-color: #090d16; color: #38bdf8; border: 2px solid #38bdf8; font-family: 'Fira Code', monospace; }
+    .theme-luxe { background: #111827; color: #f3f4f6; border: 10px solid #d97706; }
+    .theme-academic { border: 8px double #1e3a8a; background: #fff; }
+    .theme-hackathon { background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 100%); color: #a855f7; border: 4px solid #c084fc; }
+
+    .cert-header { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+    .cert-logo { max-height: 60px; max-width: 180px; object-fit: contain; }
+    .cert-title { font-size: 32px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; margin-top: 5px; }
+    .cert-subtitle { font-size: 14px; text-transform: uppercase; letter-spacing: 1.5px; opacity: 0.8; }
+    
+    .cert-body { text-align: center; margin: 15px 0; }
+    .cert-recipient { font-size: 36px; font-weight: 700; margin: 10px 0; border-bottom: 2px solid currentColor; display: inline-block; padding: 0 20px 5px; }
+    .cert-text { font-size: 14px; max-width: 80%; margin: 10px auto; line-height: 1.5; font-family: 'Playfair Display', serif; }
+    
+    .cert-footer { display: flex; justify-content: space-between; align-items: flex-end; padding: 0 20px; }
+    .cert-sig-block { text-align: center; width: 180px; }
+    .cert-sig-img { max-height: 45px; max-width: 150px; margin-bottom: 4px; }
+    .cert-sig-line { border-top: 1px solid currentColor; padding-top: 4px; font-size: 12px; font-weight: 600; }
+    .cert-qr-container { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+    .cert-qr { width: 64px; height: 64px; background: #fff; padding: 2px; }
+    .cert-id { font-size: 10px; font-family: monospace; opacity: 0.7; }
+
+    #sigCanvas { border: 1px dashed var(--border-color); background: #0f172a; border-radius: 6px; cursor: crosshair; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="logo">
+      <i data-lucide="award"></i>
+      <span>CertifyCraft</span>
+    </div>
+    <div style="font-size: 0.85rem; color: var(--text-muted);">
+      Placement Ready • Mini Project
+    </div>
+  </header>
+
+  <div class="container">
+    <!-- Sidebar / Controls -->
+    <div class="sidebar">
+      
+      <div class="tabs">
+        <button class="tab-btn active" onclick="switchTab('design')">Design</button>
+        <button class="tab-btn" onclick="switchTab('content')">Content</button>
+        <button class="tab-btn" onclick="switchTab('signature')">Signature</button>
+        <button class="tab-btn" onclick="switchTab('batch')">Batch CSV</button>
+      </div>
+
+      <!-- Tab: Design -->
+      <div id="tab-design" class="tab-content active">
+        <div class="section-title"><i data-lucide="layout"></i> Template Presets</div>
+        <div class="form-group">
+          <select id="templatePreset" class="form-control" onchange="updateDesign()">
+            <option value="theme-classic">Classic Gold Distinction</option>
+            <option value="theme-modern">Modern Corporate Minimal</option>
+            <option value="theme-tech">Tech / Developer Terminal</option>
+            <option value="theme-luxe">Luxe Dark Gold</option>
+            <option value="theme-academic">Academic University</option>
+            <option value="theme-hackathon">Hackathon Champion</option>
+          </select>
+        </div>
+
+        <div class="section-title"><i data-lucide="type"></i> Typography & Styling</div>
+        <div class="form-group">
+          <label>Font Family</label>
+          <select id="fontFamily" class="form-control" onchange="updateDesign()">
+            <option value="'Cinzel', serif">Cinzel (Formal/Serif)</option>
+            <option value="'Playfair Display', serif">Playfair Display</option>
+            <option value="'Montserrat', sans-serif">Montserrat (Modern Clean)</option>
+            <option value="'Fira Code', monospace">Fira Code (Tech/Monospace)</option>
+            <option value="'Alex Brush', cursive">Alex Brush (Calligraphy)</option>
+          </select>
+        </div>
+
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Primary Accent</label>
+            <input type="color" id="primaryColor" class="form-control" value="#d97706" onchange="updateDesign()">
+          </div>
+          <div class="form-group">
+            <label>Text Color</label>
+            <input type="color" id="textColor" class="form-control" value="#1e293b" onchange="updateDesign()">
+          </div>
+        </div>
+      </div>
+
+      <!-- Tab: Content -->
+      <div id="tab-content" class="tab-content">
+        <div class="section-title"><i data-lucide="file-text"></i> Details</div>
+        <div class="form-group">
+          <label>Certificate Header</label>
+          <input type="text" id="certHeader" class="form-control" value="Certificate of Completion" oninput="renderCertificate()">
+        </div>
+        <div class="form-group">
+          <label>Subtitle / Category</label>
+          <input type="text" id="certSubtitle" class="form-control" value="This is proudly presented to" oninput="renderCertificate()">
+        </div>
+        <div class="form-group">
+          <label>Recipient Name</label>
+          <input type="text" id="recipientName" class="form-control" value="Madhumitha B" oninput="renderCertificate()">
+        </div>
+        <div class="form-group">
+          <label>Description / Reason</label>
+          <textarea id="certDescription" class="form-control" oninput="renderCertificate()">for successfully completing the 8-week course on Low-Code Workflow Automation and Intelligent Data Collection with distinction.</textarea>
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label>Issue Date</label>
+            <input type="date" id="issueDate" class="form-control" onchange="renderCertificate()">
+          </div>
+          <div class="form-group">
+            <label>Signatory Title</label>
+            <input type="text" id="sigTitle" class="form-control" value="Authorized Director" oninput="renderCertificate()">
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Organization Logo</label>
+          <input type="file" id="logoUpload" class="form-control" accept="image/*" onchange="handleLogoUpload(event)">
+        </div>
+      </div>
+
+      <!-- Tab: Signature Pad -->
+      <div id="tab-signature" class="tab-content">
+        <div class="section-title"><i data-lucide="pen-tool"></i> Digital Signature</div>
+        <canvas id="sigCanvas" width="330" height="130"></canvas>
+        <div class="grid-2" style="margin-top: 0.5rem;">
+          <button class="btn btn-outline" onclick="clearSignature()">Clear</button>
+          <button class="btn btn-secondary" onclick="saveSignature()">Apply Signature</button>
+        </div>
+      </div>
+
+      <!-- Tab: Batch Processing -->
+      <div id="tab-batch" class="tab-content">
+        <div class="section-title"><i data-lucide="users"></i> Batch Generation</div>
+        <div class="form-group">
+          <label>Recipient Names (Comma Separated)</label>
+          <textarea id="batchNames" class="form-control" placeholder="John Doe, Jane Smith, Alex Johnson"></textarea>
+        </div>
+        <button class="btn btn-primary" onclick="generateBatchPDF()"><i data-lucide="file-spread-sheet"></i> Download Batch PDF</button>
+      </div>
+
+      <hr style="border-color: var(--border-color); margin: 1rem 0;">
+
+      <!-- Export Actions -->
+      <div style="display: flex; flex-direction: column; gap: 0.5rem;">
+        <button class="btn btn-primary" onclick="exportPNG()"><i data-lucide="download"></i> Export High-Res PNG</button>
+        <button class="btn btn-secondary" onclick="exportPDF()"><i data-lucide="file-text"></i> Export PDF Document</button>
+        <button class="btn btn-outline" onclick="window.print()"><i data-lucide="printer"></i> Print Certificate</button>
+      </div>
+
+    </div>
+
+    <!-- Main Live Preview Canvas -->
+    <div class="main-view">
+      <div class="preview-toolbar">
+        <span style="font-size: 0.85rem; font-weight: 600; color: var(--text-muted);">
+          <i data-lucide="eye" style="width: 14px; vertical-align: middle;"></i> Live Preview Stage
+        </span>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; width: auto;" onclick="zoomPreview(0.1)"><i data-lucide="zoom-in"></i></button>
+          <button class="btn btn-outline" style="padding: 0.25rem 0.5rem; width: auto;" onclick="zoomPreview(-0.1)"><i data-lucide="zoom-out"></i></button>
+        </div>
+      </div>
+
+      <!-- The Printable Certificate Container -->
+      <div id="certStage" class="cert-stage">
+        <div id="certificate" class="certificate theme-classic">
+          
+          <div class="cert-header">
+            <img id="displayLogo" class="cert-logo" src="https://via.placeholder.com/150x50/0f172a/ffffff?text=CERTIFY+CRAFT" alt="Logo">
+            <h1 id="displayHeader" class="cert-title">Certificate of Completion</h1>
+            <p id="displaySubtitle" class="cert-subtitle">This is proudly presented to</p>
+          </div>
+
+          <div class="cert-body">
+            <div id="displayRecipient" class="cert-recipient">Madhumitha B</div>
+            <p id="displayDescription" class="cert-text">
+              for successfully completing the 8-week course on Low-Code Workflow Automation and Intelligent Data Collection with distinction.
+            </p>
+          </div>
+
+          <div class="cert-footer">
+            <div class="cert-sig-block">
+              <img id="displaySig" class="cert-sig-img" src="" style="display: none;" alt="Signature">
+              <div class="cert-sig-line" id="displaySigTitle">Authorized Director</div>
+              <div style="font-size: 10px; opacity: 0.7;" id="displayDate">Date: 2026-10-23</div>
+            </div>
+
+            <div class="cert-qr-container">
+              <div id="qrcode" class="cert-qr"></div>
+              <span id="displayCertID" class="cert-id">ID: CC-892341</span>
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <script>
+    let currentZoom = 0.85;
+    let sigPad;
+    let qrcodeObj;
+
+    window.addEventListener('DOMContentLoaded', () => {
+      lucide.createIcons();
+      document.getElementById('issueDate').valueAsDate = new Date();
+      
+      // Init Signature Pad
+      const canvas = document.getElementById('sigCanvas');
+      sigPad = new SignaturePad(canvas, { backgroundColor: 'rgb(15, 23, 42)', penColor: 'rgb(255, 255, 255)' });
+
+      // Init QR Code
+      qrcodeObj = new QRCode(document.getElementById("qrcode"), {
+        text: "https://certifycraft.verify/CC-892341",
+        width: 60,
+        height: 60
+      });
+
+      applyScale();
+      renderCertificate();
+    });
+
+    function switchTab(tabName) {
+      document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
+      
+      event.target.classList.add('active');
+      document.getElementById(`tab-${tabName}`).classList.add('active');
+    }
+
+    function renderCertificate() {
+      document.getElementById('displayHeader').innerText = document.getElementById('certHeader').value;
+      document.getElementById('displaySubtitle').innerText = document.getElementById('certSubtitle').value;
+      document.getElementById('displayRecipient').innerText = document.getElementById('recipientName').value || 'Recipient Name';
+      document.getElementById('displayDescription').innerText = document.getElementById('certDescription').value;
+      document.getElementById('displaySigTitle').innerText = document.getElementById('sigTitle').value;
+      document.getElementById('displayDate').innerText = 'Date: ' + document.getElementById('issueDate').value;
+    }
+
+    function updateDesign() {
+      const cert = document.getElementById('certificate');
+      const preset = document.getElementById('templatePreset').value;
+      const font = document.getElementById('fontFamily').value;
+      const primary = document.getElementById('primaryColor').value;
+      const textColor = document.getElementById('textColor').value;
+
+      cert.className = `certificate ${preset}`;
+      cert.style.fontFamily = font;
+      cert.style.color = textColor;
+      document.getElementById('displayRecipient').style.borderColor = primary;
+    }
+
+    function handleLogoUpload(event) {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = function(e) {
+          document.getElementById('displayLogo').src = e.target.result;
+        }
+        reader.readAsDataURL(file);
+      }
+    }
+
+    function clearSignature() {
+      sigPad.clear();
+      document.getElementById('displaySig').style.display = 'none';
+    }
+
+    function saveSignature() {
+      if (!sigPad.isEmpty()) {
+        const sigImg = document.getElementById('displaySig');
+        sigImg.src = sigPad.toDataURL();
+        sigImg.style.display = 'block';
+      }
+    }
+
+    function zoomPreview(delta) {
+      currentZoom = Math.min(Math.max(0.4, currentZoom + delta), 1.2);
+      applyScale();
+    }
+
+    function applyScale() {
+      document.getElementById('certStage').style.transform = `scale(${currentZoom})`;
+    }
+
+    async function exportPNG() {
+      const cert = document.getElementById('certificate');
+      const canvas = await html2canvas(cert, { scale: 3 });
+      const link = document.createElement('a');
+      link.download = `Certificate_${document.getElementById('recipientName').value}.png`;
+      link.href = canvas.toDataURL('image/png');
+      link.click();
+    }
+
+    async function exportPDF() {
+      const { jsPDF } = window.jspdf;
+      const cert = document.getElementById('certificate');
+      const canvas = await html2canvas(cert, { scale: 3 });
+      const imgData = canvas.toDataURL('image/png');
+
+      const pdf = new jsPDF('landscape', 'pt', 'a4');
+      pdf.addImage(imgData, 'PNG', 0, 0, 842, 595);
+      pdf.save(`Certificate_${document.getElementById('recipientName').value}.pdf`);
+    }
+
+    async function generateBatchPDF() {
+      const namesInput = document.getElementById('batchNames').value;
+      if (!namesInput.trim()) {
+        alert('Please enter recipient names separated by commas.');
+        return;
+      }
+
+      const names = namesInput.split(',').map(n => n.trim()).filter(n => n);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF('landscape', 'pt', 'a4');
+
+      for (let i = 0; i < names.length; i++) {
+        document.getElementById('recipientName').value = names[i];
+        renderCertificate();
+
+        const cert = document.getElementById('certificate');
+        const canvas = await html2canvas(cert, { scale: 2 });
+        const imgData = canvas.toDataURL('image/png');
+
+        if (i > 0) pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 0, 0, 842, 595);
+      }
+
+      pdf.save('Batch_Certificates.pdf');
+    }
+  </script>
+</body>
+</html>
